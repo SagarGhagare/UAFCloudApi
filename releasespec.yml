@@ -1,0 +1,33 @@
+version: 0.2
+
+phases:
+ pre_build:
+   commands:
+     - printenv
+     - echo "--- Listing working directory ---"
+     - ls -al
+     - echo $CODEBUILD_SOURCE_VERSION
+     - BUCKETANDKEY=`echo ${CODEBUILD_SOURCE_VERSION} | sed -r 's/[^.]*::://'`
+     - echo $BUCKETANDKEY
+     - PACKAGE=`echo ${BUCKETANDKEY} | sed -r 's_[^.]*/__'`
+     - echo $PACKAGE
+     - PARENTPATH=`echo ${BUCKETANDKEY} | sed -r "s_${PACKAGE}__"`
+     - echo $PARENTPATH
+     - echo "--- Getting Package Bucket Name ---"
+     - BUCKET=`aws ssm get-parameters --names /project/${PROJECT_NAME}/pipeline_bucket --query Parameters[0].Value --output text`
+     - echo ${BUCKET}
+     - echo "--- Getting Package Key Name ---"
+     - KEY=`aws ssm get-parameters --names /project/${PROJECT_NAME}/package_bucket_key --query Parameters[0].Value --output text`
+ build:
+   commands:
+     - echo Build started on `date`
+     - echo "--- Zipping next component release ---"
+     - zip -r  uaf-be.zip *
+     - echo Build finished at `date`
+ post_build:
+   commands:
+     - echo "--- Listing working directory ---"
+     - ls -al
+     - aws s3 rm s3://${BUCKET}/${KEY}/uaf-be.zip
+     - aws s3 cp uaf-be.zip s3://${BUCKET}/${KEY}/
+     - echo Build completed on `date`

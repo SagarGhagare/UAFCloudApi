@@ -1,0 +1,27 @@
+version: 0.2
+
+phases:
+ pre_build:
+   commands:
+     - printenv
+ build:
+   commands:
+     - echo Build started on `date`
+     - make build
+     - echo Build finished at `date`
+ post_build:
+   commands:
+     - cp deployment-artifacts/fidouaf-api.jar fidouaf-api.jar
+     - cp infrastructure/deployspec.yml deployspec.yml
+     - echo "--- Listing working directory ---"
+     - ls -al
+     - echo Build completed on `date`
+artifacts:
+  files:
+    - fidouaf-api.jar
+    - buildspec.yml
+    - deployspec.yml
+    - releasespec.yml
+    - outputspec.yml
+    - deploy_event.json
+    - infrastructure/**/*

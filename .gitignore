@@ -1,0 +1,52 @@
+# Distribution / packaging
+.Python
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+*.egg-info/
+.installed.cfg
+*.egg
+*.pyc
+node_modules/
+*.class
+target/
+deployment-artifacts
+lambda-packaging*
+java/bin
+.terraform/
+
+# Package Files
+*.jar
+*.war
+*.ear
+*.zip
+*.tar.gz
+*.rar
+
+# Serverless directories
+.serverless
+
+# IDEA Project Files
+*.iml
+.idea
+
+# Node
+package-lock.json
+
+# Python Virtualenv
+venv/
+
+# Sonar
+.scannerwork/
+
+# Editors
+.vscode/

@@ -1,0 +1,8 @@
+[
+    {
+      "Source": "ENVIRONMENT_NAME.codebuild",
+      "DetailType": "CodeBuild deployment complete",
+      "Detail": "{ \"build-status\": \"DEPLOYMENT_STATE\", \"subproject-name\": \"ENVIRONMENT_NAME-uaf-be\", \"package-location\": \"BUILD\" }"
+    }
+  ]
+  
