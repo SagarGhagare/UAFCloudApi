@@ -1,0 +1,52 @@
+version: 0.2
+
+phases:
+  pre_build:
+    commands:
+      - echo "Entering pre_build phase..."
+      - printenv
+      - echo "Obtaining Terraform Version..."
+      - TERRAFORM_VERSION=`aws ssm get-parameters --names /project/${PROJECT_NAME}/pipeline_objects_terraform_version --query Parameters[0].Value --output text`
+      - echo "--- Getting common deployment parameters ---"
+      - TFSTATE_BUCKET=`aws ssm get-parameters --names /project/${PROJECT_NAME}/tfstate_bucket --query Parameters[0].Value --output text`
+      - TFSTATE_BUCKET_PARENT_KEY=`aws ssm get-parameters --names /project/${PROJECT_NAME}/tfstate_bucket_parent_key --query Parameters[0].Value --output text`
+      - DEPLOY_REGION=`aws ssm get-parameters --names /environment/${ENVIRONMENT_NAME}/environment_region --query Parameters[0].Value --output text`
+      - DEPLOY_DOMAIN=`aws ssm get-parameters --names /environment/${ENVIRONMENT_NAME}/domain --query Parameters[0].Value --output text`
+      - echo "--- Construct TF state key ---"
+      - TFSTATE_KEY="${TFSTATE_BUCKET_PARENT_KEY}/${ENVIRONMENT_NAME}/fido-uaf-server.tfstate"
+      - echo ${TFSTATE_KEY}
+      - wget https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_linux_amd64.zip
+      - unzip terraform_${TERRAFORM_VERSION}_linux_amd64.zip
+      - mv terraform /bin
+      - rm terraform_${TERRAFORM_VERSION}_linux_amd64.zip
+      - echo "--- Listing ROOT directory ---"
+      - ls -al
+      - echo $CODEBUILD_SOURCE_VERSION
+      - BUCKETANDKEY=`echo ${CODEBUILD_SOURCE_VERSION} | sed -r 's/[^.]*::://'`
+      - echo $BUCKETANDKEY
+      - PACKAGE=`echo ${BUCKETANDKEY} | sed -r 's_[^.]*/__'`
+      - echo $PACKAGE
+      - cd infrastructure/terraform
+      - echo "--- Listing working directory again ---"
+      - ls -al
+      - terraform init -backend-config="bucket=${TFSTATE_BUCKET}" -backend-config="key=${TFSTATE_KEY}"
+      - echo "--- Running TF plan ---"
+      - aws sts assume-role --role-arn ${ROLE_ARN} --role-session-name AWSCLI-Session
+      - terraform plan -var project=${PROJECT_NAME} -var environment=${ENVIRONMENT_NAME} -var subproject=fido-uaf-server -var region=${DEPLOY_REGION} -var role_arn=${ROLE_ARN} -var role_session_name=AWSCLI-Session -var artifact=${PACKAGE} -input=false
+    finally:
+      - echo "Pre_build step finished."
+  build:
+    commands:
+      - echo "Entering build phase..."
+      - echo '--- Running TF ${TF_ACTION} ---'
+      - terraform apply -auto-approve -var project=${PROJECT_NAME} -var environment=${ENVIRONMENT_NAME} -var subproject=fido-uaf-server -var region=${DEPLOY_REGION} -var role_arn=${ROLE_ARN} -var role_session_name=AWSCLI-Session -var artifact=${PACKAGE} -input=false
+      - echo "--- Modify Deploy Event Generator ---"
+      - cd ../..
+      - sed -i 's/ENVIRONMENT_NAME/'${ENVIRONMENT_NAME}'/g' deploy_event.json
+      - sed -i 's/DEPLOYMENT_STATE/'SUCCEEDED'/g' deploy_event.json
+      - sed -i 's_BUILD_'${CODEBUILD_SOURCE_VERSION}'_g' deploy_event.json
+      - echo "--- Raise Deployment Event ---"
+      - cat deploy_event.json
+      - aws events put-events --entries file://deploy_event.json --region ${DEPLOY_REGION}
+    finally:
+      - echo "Build step finished."
