@@ -65,7 +65,6 @@ public class NotaryService implements INotaryService {
 			DDB_REGION = config.getAwsRegionName();
 			secretName = config.getFidoSecretKeyName();
 			SIGNATURES_TABLE_NAME = config.getFidoSignatureTable();
-			secretHelper =  SecretHelper.getInstance();
 			logger.debug("Created secretHelper");
 			logger.debug("Secret Name within secrets manager is ", secretName);
 			ddb = AmazonDynamoDBClient.builder().withRegion(DDB_REGION).build();

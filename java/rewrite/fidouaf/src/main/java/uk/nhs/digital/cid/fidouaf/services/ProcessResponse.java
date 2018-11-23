@@ -27,78 +27,86 @@ import org.ebayopensource.fido.uaf.storage.AuthenticatorRecord;
 import org.ebayopensource.fido.uaf.storage.RegistrationRecord;
 import org.ebayopensource.fido.uaf.storage.StorageInterface;
 
-public class ProcessResponse {
+import com.google.inject.Inject;
 
-	private static int SERVER_DATA_EXPIRY_IN_MS = Integer.parseInt(System.getenv("FIDO_EXPIRY_MSECS"));
+import uk.nhs.digital.cid.fidouaf.logging.Logger;
+import uk.nhs.digital.cid.fidouaf.util.Configuration;
+
+public class ProcessResponse implements IProcessResponse {
+
+	private Logger logger;
+	private static int SERVER_DATA_EXPIRY_IN_MS;
 
 	private Notary notary = null;
 	private StorageInterface storage = null;
 	private FinalChallengeParamsValidator finalChallengeParamsValidator = null;
-	// Gson gson = new Gson ();
 
-	public ProcessResponse(Notary notary, StorageInterface storage, int data_expiry)
-	{
+	@Inject
+	public ProcessResponse(Configuration config, Logger logger, Notary notary, StorageInterface storage) {
+		this.logger = logger;
+		SERVER_DATA_EXPIRY_IN_MS = Integer.parseInt(config.getFidoExpiry());
+		this.notary = notary;
+		this.storage = storage;
+		this.finalChallengeParamsValidator = new FinalChallengeParamsValidatorImpl();
+	}
+
+	public ProcessResponse(Notary notary, StorageInterface storage, int data_expiry) {
 		this.notary = notary;
 		this.storage = storage;
 		SERVER_DATA_EXPIRY_IN_MS = data_expiry;
 		this.finalChallengeParamsValidator = new FinalChallengeParamsValidatorImpl();
 	}
-	
-	public ProcessResponse(Notary notary, StorageInterface storage, FinalChallengeParamsValidator finalChallengeParamsValidator, int data_expiry)
-	{
+
+	public ProcessResponse(Notary notary, StorageInterface storage,
+			FinalChallengeParamsValidator finalChallengeParamsValidator, int data_expiry) {
 		this.notary = notary;
 		this.storage = storage;
 		SERVER_DATA_EXPIRY_IN_MS = data_expiry;
 		this.finalChallengeParamsValidator = finalChallengeParamsValidator;
 	}
 
-	public ProcessResponse(Notary notary, StorageInterface storage)
-	{
+	public ProcessResponse(Notary notary, StorageInterface storage) {
 		this.notary = notary;
 		this.storage = storage;
 		this.finalChallengeParamsValidator = new FinalChallengeParamsValidatorImpl();
 	}
-	public ProcessResponse(Notary notary, StorageInterface storage, FinalChallengeParamsValidator finalChallengeParamsValidator)
-	{
+
+	public ProcessResponse(Notary notary, StorageInterface storage,
+			FinalChallengeParamsValidator finalChallengeParamsValidator) {
 		this.notary = notary;
 		this.storage = storage;
 		this.finalChallengeParamsValidator = finalChallengeParamsValidator;
 	}
-//	public ProcessResponse() {
-//		this._notary = NotaryImpl.getInstance();
-//		this._storage = StorageImpl.getInstance();
-//	}
+
 	public AuthenticatorRecord[] processAuthResponse(AuthenticationResponse resp) {
+		logger.info("processAuthResponse received AuthenticationResponse ", resp);
 		AuthenticatorRecord[] result = null;
 		try {
-			result = new AuthenticationResponseProcessing(
-					SERVER_DATA_EXPIRY_IN_MS, notary, finalChallengeParamsValidator).verify(
-					resp, storage);
+			result = new AuthenticationResponseProcessing(SERVER_DATA_EXPIRY_IN_MS, notary,
+					finalChallengeParamsValidator).verify(resp, storage);
 		} catch (Exception e) {
-			System.out
-					.println("!!!!!!!!!!!!!!!!!!!..............................."
-							+ e.getMessage());
+			logger.error(e.getMessage(), e);
 			result = new AuthenticatorRecord[1];
 			result[0] = new AuthenticatorRecord();
 			result[0].status = e.getMessage();
 		}
+		logger.info("processAuthResponse returning AuthenticatorRecord[] ", result);
 		return result;
 	}
 
 	public RegistrationRecord[] processRegResponse(RegistrationResponse resp) {
+		logger.info("processRegResponse received  RegistrationResponse ", resp);
 		RegistrationRecord[] result = null;
 		try {
-			result = new RegistrationResponseProcessing(
-					SERVER_DATA_EXPIRY_IN_MS, notary, finalChallengeParamsValidator)
+			result = new RegistrationResponseProcessing(SERVER_DATA_EXPIRY_IN_MS, notary, finalChallengeParamsValidator)
 					.processResponse(resp);
 		} catch (Exception e) {
-			System.out
-					.println("!!!!!!!!!!!!!!!!!!!..............................."
-							+ e.getMessage());
+			logger.error(e.getMessage(), e);
 			result = new RegistrationRecord[1];
 			result[0] = new RegistrationRecord();
 			result[0].status = e.getMessage();
 		}
+		logger.info("processRegResponse returning RegistrationRecord[] ", result);
 		return result;
 	}
 }

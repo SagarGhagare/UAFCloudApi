@@ -15,29 +15,26 @@ import org.ebayopensource.fido.uaf.msg.Version;
 import org.ebayopensource.fido.uaf.storage.AuthenticatorRecord;
 import org.ebayopensource.fido.uaf.storage.StorageInterface;
 
-import com.google.inject.Guice;
 import com.google.inject.Inject;
-import com.google.inject.Injector;
 
 import uk.nhs.digital.cid.fidouaf.facets.Facets;
 import uk.nhs.digital.cid.fidouaf.facets.TrustedFacets;
 import uk.nhs.digital.cid.fidouaf.logging.Logger;
 import uk.nhs.digital.cid.fidouaf.stats.Dash;
-import uk.nhs.digital.cid.fidouaf.util.InjectorModule;
 
 public class AuthenticationService implements IAuthenticationService {
 
 	private final StorageInterface storage;
 	private final Notary notary;
-	protected Injector injector = Guice.createInjector(new InjectorModule());
-
-	@Inject
+	private final IProcessResponse processResponse;
 	protected Logger logger;
 
 	@Inject
-	public AuthenticationService(StorageInterface storage, Notary notary) {
+	public AuthenticationService(StorageInterface storage, Notary notary, IProcessResponse processResponse, Logger logger) {
 		this.storage = storage;
 		this.notary = notary;
+		this.processResponse = processResponse;
+		this.logger = logger;
 	}
 
 	/**
@@ -99,8 +96,8 @@ public class AuthenticationService implements IAuthenticationService {
 	protected AuthenticatorRecord[] processAuthResponseObject(AuthenticationResponse[] authResp) {
 		Dash.getInstance().stats.put(Dash.LAST_AUTH_RES, authResp);
 		Dash.getInstance().history.add(authResp);
-		AuthenticatorRecord[] result = new ProcessResponse(notary, storage).processAuthResponse(authResp[0]);
-		logger.debug("Response to authResponse POST is", stringifyAuthenticatorRecordArray(result));
+		AuthenticatorRecord[] result = processResponse.processAuthResponse(authResp[0]);
+		logger.info("Response to authResponse POST is", stringifyAuthenticatorRecordArray(result));
 		return result;
 	}
 

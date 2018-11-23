@@ -11,33 +11,25 @@ import com.amazonaws.services.secretsmanager.model.InternalServiceErrorException
 import com.amazonaws.services.secretsmanager.model.InvalidParameterException;
 import com.amazonaws.services.secretsmanager.model.InvalidRequestException;
 import com.amazonaws.services.secretsmanager.model.ResourceNotFoundException;
-import com.google.inject.Guice;
 import com.google.inject.Inject;
-import com.google.inject.Injector;
 
 import uk.nhs.digital.cid.fidouaf.logging.Logger;
 import uk.nhs.digital.cid.fidouaf.util.Configuration;
-import uk.nhs.digital.cid.fidouaf.util.InjectorModule;
 
-public class SecretHelper {
+public class SecretHelper implements ISecretHelper {
 
-	protected Injector injector = Guice.createInjector(new InjectorModule());
-
-	@Inject
-	protected Logger logger;
-
-	@Inject
+	private Logger logger;
 	private Configuration config;
 
-	private static SecretHelper instance = new SecretHelper();
 	private static final String VERSIONSTAGECURRENT = "AWSCURRENT";
 	private static final String VERSIONSTAGEPREVIOUS = "AWSPREVIOUS";
 	private static HashMap<String, String> currentSecret = new HashMap<String, String>();
 	private static HashMap<String, String> previousSecret = new HashMap<String, String>();
-	// private static final String region = "eu-west-2";
 
-	public static SecretHelper getInstance() {
-		return instance;
+	@Inject
+	public SecretHelper(Configuration config, Logger logger) {
+		this.config = config;
+		this.logger = logger;
 	}
 
 	public void updateSecrets(String secretName) {
@@ -46,25 +38,26 @@ public class SecretHelper {
 	}
 
 	public String getCurrent(String secretName) {
-		logger.debug("entered getCurrent for key ", secretName);
+		secretName = config.getFidoSecretKeyName();
+		logger.info("entered getCurrent for key "+ secretName);
 		if (!currentSecret.containsKey(secretName)) {
-			logger.debug("currentSecret is null for key " + secretName + ", so updating");
+			logger.info("currentSecret is null for key " + secretName + ", so updating");
 			updateSecrets(secretName);
 		}
 		return currentSecret.get(secretName);
 	}
 
 	public String getPrevious(String secretName) {
-		logger.debug("entered getPrevious for key ", secretName);
+		logger.info("entered getPrevious for key "+ secretName);
 		if (!previousSecret.containsKey(secretName)) {
-			logger.debug("previousSecret is null for key " + secretName + ", so updating");
+			logger.info("previousSecret is null for key " + secretName + ", so updating");
 			updateSecrets(secretName);
 		}
 		return previousSecret.get(secretName);
 	}
 
 	private String getSecret(String secretName, String versionStage) {
-		logger.debug("entered getSecret for secretName " + secretName + " and versionStage " + versionStage);
+		logger.info("entered getSecret for secretName " + secretName + " and versionStage " + versionStage);
 		// Create a Secrets Manager client
 		AWSSecretsManager client = AWSSecretsManagerClientBuilder.standard().withRegion(config.getAwsRegionName())
 				.build();
@@ -102,7 +95,7 @@ public class SecretHelper {
 		} catch (ResourceNotFoundException e) {
 			// We can't find the resource that you asked for.
 			// Deal with the exception here, and/or rethrow at your discretion.
-			logger.warn("Caught ResourceNotFoundException ", e);
+			logger.error("Caught ResourceNotFoundException ", e);
 		}
 
 		// Decrypts secret using the associated KMS CMK.
@@ -110,21 +103,21 @@ public class SecretHelper {
 		// will be populated.
 		if (getSecretValueResult != null) {
 			if (getSecretValueResult.getSecretString() != null) {
-				logger.debug("The secretValueResult is " + getSecretValueResult.toString());
+				logger.info("The secretValueResult is ", getSecretValueResult);
 				return processSecretValueResultString(getSecretValueResult.getSecretString());
 			} else {
-				logger.warn("Failed to retrieve secret for secretName " + secretName + " and versionStage "
+				logger.error("Failed to retrieve secret for secretName " + secretName + " and versionStage "
 						+ versionStage + " as string value was null");
 				return new String();
 			}
 		} else {
-			logger.warn("Failed to retrieve secret for secretName " + secretName + " and versionStage " + versionStage);
+			logger.error("Failed to retrieve secret for secretName " + secretName + " and versionStage " + versionStage);
 			return new String();
 		}
 	}
 
 	private String processSecretValueResultString(String secretValueResultString) {
-		logger.debug("Entered processSecretValueResultString with secretValueResultString ", secretValueResultString);
+		logger.info("Entered processSecretValueResultString with secretValueResultString "+ secretValueResultString);
 		// string is in format {"[[[secretName]]]":"[[[secretValue]]]"} - this function
 		// returns [[[secretValue]]]
 		try {

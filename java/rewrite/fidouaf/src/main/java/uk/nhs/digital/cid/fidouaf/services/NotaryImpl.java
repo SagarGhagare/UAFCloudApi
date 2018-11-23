@@ -42,66 +42,39 @@ import uk.nhs.digital.cid.fidouaf.util.Configuration;
  */
 public class NotaryImpl implements Notary {
 
-	@Inject
 	private Logger logger;
+	private Configuration config;
+	private ISecretHelper secretHelper;
 
 	@Inject
-	private Configuration config;
-
-	private static int SERVER_DATA_EXPIRY_IN_MS;
-	private String DDB_REGION;
-	private AmazonDynamoDB ddb;
-	private DynamoDB dynamoDB;
-	private Table signaturesTable;
-	// private String hmacSecret = "HMAC-is-just-one-way";
-	private static Notary instance = new NotaryImpl();
-	private SecretHelper secretHelper = null;
-	private String secretName; // "test/HMACNotarySecret";
-	private String SIGNATURES_TABLE_NAME;
-
-	public NotaryImpl() {
-		// Init
-		try {
-			logger.debug("Initialising NotaryImpl");
-			SERVER_DATA_EXPIRY_IN_MS = Integer.parseInt(config.getFidoExpiry());
-			DDB_REGION = config.getAwsRegionName();
-			secretName = config.getFidoSecretKeyName();
-			SIGNATURES_TABLE_NAME = config.getFidoSignatureTable();
-			secretHelper = SecretHelper.getInstance();
-			logger.debug("Created secretHelper");
-			logger.debug("Secret Name within secrets manager is " + secretName);
-			ddb = AmazonDynamoDBClient.builder().withRegion(DDB_REGION).build();
-			dynamoDB = new DynamoDB(ddb);
-			signaturesTable = dynamoDB.getTable(SIGNATURES_TABLE_NAME);
-		} catch (Exception e) {
-			logger.error(e.getMessage(), e);
-		}
-	}
-
-	public static Notary getInstance() {
-		return instance;
+	public NotaryImpl(Configuration config, Logger logger, ISecretHelper secretHelper) {
+		this.config = config;
+		this.logger = logger;
+		this.secretHelper = secretHelper;
 	}
 
 	public void rotateSecret() {
-		logger.debug("Entered rotateSecret");
-		secretHelper.updateSecrets(secretName);
-		logger.debug("Exiting rotateSecret - secret values have been updated from Secrets Manager");
+		logger.info("Entered rotateSecret");
+		secretHelper.updateSecrets(config.getFidoSecretKeyName());
+		logger.info("Exiting rotateSecret - secret values have been updated from Secrets Manager");
 	}
 
 	public String sign(String signData) {
 		try {
 			String signature = Base64
-					.encodeBase64URLSafeString(HMAC.sign(signData, secretHelper.getCurrent(secretName)));
+					.encodeBase64URLSafeString(HMAC.sign(signData, secretHelper.getCurrent(config.getFidoSecretKeyName())));
 			storeAWS(signature);
 			return signature;
 		} catch (Exception e) {
-			logger.error(e.getMessage(), e);
+			e.printStackTrace();
+			logger.error(e, e);
 		}
 		return null;
 	}
 
 	public boolean verify(String signData, String signature) {
-		logger.debug("Entered verify of NotaryImpl");
+		logger.info("Entered verify of NotaryImpl");
+		String secretName = config.getFidoSecretKeyName();
 		if (!verifyAWS(signature)) {
 			logger.warn("The signature failed the replay check");
 			return false;
@@ -125,7 +98,7 @@ public class NotaryImpl implements Notary {
 							HMAC.sign(signData, secretHelper.getCurrent(secretName)));
 				}
 			}
-			logger.debug("Result if signature verification is ", result);
+			logger.info("Result if signature verification is ", result);
 			return result;
 		} catch (Exception e) {
 			logger.error(e.getMessage(), e);
@@ -134,34 +107,37 @@ public class NotaryImpl implements Notary {
 	}
 
 	private void storeAWS(String signature) {
-		logger.debug("Entered storeAWS to store ... ", signature);
+		logger.info("Entered storeAWS to store ... ", signature);
 		// signaturessTable
-		Item signatureItem = new Item().withPrimaryKey("signature", signature).withNumber("expires",
+		Table table = getSignaturesTable();
+		int SERVER_DATA_EXPIRY_IN_MS = Integer.parseInt(config.getFidoExpiry());
+		Item signatureItem = new Item().withPrimaryKey("signature", signature).withNumber("expiry_time",
 				((System.currentTimeMillis() + SERVER_DATA_EXPIRY_IN_MS) / 1000L));
 		PutItemSpec putSpec = new PutItemSpec().withItem(signatureItem);
-		signaturesTable.putItem(putSpec);
-		logger.debug("Successfully stored item in DDB ... ");
+		table.putItem(putSpec);
+		logger.info("Successfully stored item in DDB ... ");
 	}
 
 	private boolean verifyAWS(String signature) {
-		logger.debug("Entered verifyAWS to check signature ... ", signature);
+		logger.info("Entered verifyAWS to check signature ... ", signature);
+		Table table = getSignaturesTable();
 		GetItemSpec spec = new GetItemSpec().withPrimaryKey("signature", signature);
 		try {
-			logger.debug("Attempting to read the item with key... ", signature);
-			logger.debug("Attempting to read the item...");
-			Item outcome = signaturesTable.getItem(spec);
+			logger.info("Attempting to read the item with key... ", signature);
+			logger.info("Attempting to read the item...");
+			Item outcome = table.getItem(spec);
 			if (outcome == null) {
-				logger.debug("Item was not present - return false");
+				logger.info("Item was not present - return false");
 				return false;
 			} else {
-				logger.debug("GetItem succeeded: " + outcome.toJSONPretty());
-				logger.debug("Deleting item to prevent replay attacks");
+				logger.info("GetItem succeeded: " + outcome.toJSONPretty());
+				logger.info("Deleting item to prevent replay attacks");
 				DeleteItemSpec delSpec = new DeleteItemSpec().withPrimaryKey("signature", signature);
 				try {
-					logger.debug("Attempting to delete the signature...");
-					DeleteItemOutcome delOutcome = signaturesTable.deleteItem(delSpec);
-					logger.debug("Deleted signature from DynamoDB");
-					logger.debug(delOutcome.getDeleteItemResult().toString());
+					logger.info("Attempting to delete the signature...");
+					DeleteItemOutcome delOutcome = table.deleteItem(delSpec);
+					logger.info("Deleted signature from DynamoDB");
+					logger.info(delOutcome.getDeleteItemResult().toString());
 					return true;
 				} catch (Exception dex) {
 					logger.error("DeleteItem failed: ", dex);
@@ -172,5 +148,14 @@ public class NotaryImpl implements Notary {
 			logger.error("GetItem failed: ", e);
 			return false;
 		}
+	}
+	
+	private Table getSignaturesTable() {
+		String DDB_REGION = config.getAwsRegionName();
+		String SIGNATURES_TABLE_NAME = config.getFidoSignatureTable();
+		AmazonDynamoDB ddb = AmazonDynamoDBClient.builder().withRegion(DDB_REGION).build();
+		DynamoDB dynamoDB = new DynamoDB(ddb);
+		Table signaturesTable = dynamoDB.getTable(SIGNATURES_TABLE_NAME);
+		return signaturesTable;
 	}
 }

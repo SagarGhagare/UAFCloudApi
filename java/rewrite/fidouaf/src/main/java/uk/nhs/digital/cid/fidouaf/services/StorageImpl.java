@@ -42,43 +42,22 @@ import uk.nhs.digital.cid.fidouaf.util.Configuration;
 
 public class StorageImpl implements StorageInterface {
 
-	@Inject
 	private Configuration config;
-
-	@Inject
 	private Logger logger;
 
-	private static StorageInterface instance = new StorageImpl();
-	private String AWS_REGION_NAME;
-	private AmazonDynamoDB ddb;
-	private DynamoDB dynamoDB;
-	private Table registrationsTable;
 	private Map<String, RegistrationRecord> db = new HashMap<String, RegistrationRecord>();
 	private Map<String, String> db_names = new HashMap<String, String>();
-	private static String FIDO_REGISTRATIONS_TABLE;
 
 	protected Gson gson = new GsonBuilder().disableHtmlEscaping().create();
 
-	public StorageImpl() {
-		// Init
-		try {
-			logger.debug("Initialising StorageImpl");
-			AWS_REGION_NAME = config.getAwsRegionName();
-			FIDO_REGISTRATIONS_TABLE = config.getFidoRegistrationsTable();
-			ddb = AmazonDynamoDBClient.builder().withRegion(AWS_REGION_NAME).build();
-			dynamoDB = new DynamoDB(ddb);
-			registrationsTable = dynamoDB.getTable(FIDO_REGISTRATIONS_TABLE);
-		} catch (Exception e) {
-			logger.error(e.getMessage(), e);
-		}
-	}
-
-	public static StorageInterface getInstance() {
-		return instance;
+	@Inject
+	public StorageImpl(Configuration config, Logger logger) {
+		this.config = config;
+		this.logger = logger;
 	}
 
 	public void storeServerDataString(String username, String serverDataString) {
-		logger.debug("Entered storeServerDataString with username " + username + " and serverDataString "
+		logger.info("Entered storeServerDataString with username " + username + " and serverDataString "
 				+ serverDataString);
 		if (db_names.containsKey(serverDataString)) {
 			db_names.remove(serverDataString);
@@ -87,7 +66,7 @@ public class StorageImpl implements StorageInterface {
 	}
 
 	public String getUsername(String serverDataString) {
-		logger.debug("Entered getUsername with serverDataString ", serverDataString);
+		logger.info("Entered getUsername with serverDataString ", serverDataString);
 		if (db_names.containsKey(serverDataString)) {
 			return db_names.get(serverDataString);
 		}
@@ -95,6 +74,7 @@ public class StorageImpl implements StorageInterface {
 	}
 
 	public void store(RegistrationRecord[] records) throws DuplicateKeyException, SystemErrorException {
+		logger.info("store received records ", records);
 		if (records != null && records.length > 0) {
 			for (int i = 0; i < records.length; i++) {
 				if (db.containsKey(records[i].authenticator.toString())) {
@@ -105,11 +85,13 @@ public class StorageImpl implements StorageInterface {
 			}
 			storeAWS(records);
 		}
+		logger.info("stored records into inmemory db ", db);
 	}
 
 	private void storeAWS(RegistrationRecord[] records) {
-		logger.debug("Entered storeAWS to store ... " + records.length + " items");
+		logger.info("Entered storeAWS to store ... " + records.length + " items");
 		// registrationsTable
+		Table table = getRegistrationsTable();
 		if (records != null && records.length > 0) {
 			for (int i = 0; i < records.length; i++) {
 				// check duplicate key
@@ -120,31 +102,32 @@ public class StorageImpl implements StorageInterface {
 				Item regItem = new Item().withPrimaryKey("authenticator_string", records[i].authenticator.toString())
 						.withString("record", gson.toJson(records[i]));
 				PutItemSpec putSpec = new PutItemSpec().withItem(regItem);
-				registrationsTable.putItem(putSpec);
-				logger.debug("Successfull put item ... " + i + " with key " + records[i].authenticator.toString());
+				table.putItem(putSpec);
+				logger.info("Successfull put item ... " + i + " with key " + records[i].authenticator.toString());
 			}
 
 		}
 	}
 
 	public RegistrationRecord readRegistrationRecord(String key) {
-		logger.debug("Got request for Registration Record with key ", key);
+		logger.info("Got request for Registration Record with key ", key);
 		RegistrationRecord rr = db.get(key);
 		rr = readRegistrationRecordAWS(key);
 		if (rr != null) {
-			logger.debug("Registration Record username details are ", rr.username);
+			logger.info("Registration Record username details are ", rr.username);
 		}
 		return rr;
 	}
 
 	private RegistrationRecord readRegistrationRecordAWS(String key) {
-		logger.debug("Entered readRegistrationRecordAWS with key ", key);
+		logger.info("Entered readRegistrationRecordAWS with key ", key);
+		Table table = getRegistrationsTable();
 		GetItemSpec spec = new GetItemSpec().withPrimaryKey("authenticator_string", key);
 		try {
-			logger.debug("Attempting to read the item with key... ", key);
-			logger.debug("Attempting to read the item...");
-			Item outcome = registrationsTable.getItem(spec);
-			logger.debug("GetItem succeeded: " + outcome.toJSONPretty());
+			logger.info("Attempting to read the item with key... ", key);
+			logger.info("Attempting to read the item...");
+			Item outcome = table.getItem(spec);
+			logger.info("GetItem succeeded: " + outcome.toJSONPretty());
 			return gson.fromJson(outcome.getString("record"), RegistrationRecord.class);
 		} catch (Exception e) {
 			logger.error(e.getMessage(), e);
@@ -157,28 +140,39 @@ public class StorageImpl implements StorageInterface {
 	}
 
 	public void deleteRegistrationRecord(String key) {
+		logger.info("deleteRegistrationRecord key ", key);
+		logger.info("deleteRegistrationRecord db ", db);
 		if (db != null && db.containsKey(key)) {
-			logger.debug("Deleting object associated with key=", key);
+			logger.info("Deleting object associated with key=", key);
 			db.remove(key);
-			deleteRegistrationRecordAWS(key);
 		}
+		deleteRegistrationRecordAWS(key);
 	}
 
 	private void deleteRegistrationRecordAWS(String key) {
+		logger.info("deleteRegistrationRecordAWS key ", key);
+		Table table = getRegistrationsTable();
 		DeleteItemSpec spec = new DeleteItemSpec().withPrimaryKey("authenticator_string", key);
 		try {
 			// logger.log("Attempting to read the item...");
-			DeleteItemOutcome outcome = registrationsTable.deleteItem(spec);
-			logger.debug("Deleted item from DynamoDB with key ", key);
-			logger.debug("GetItem succeeded: ", outcome);
+			DeleteItemOutcome outcome = table.deleteItem(spec);
+			logger.info("Deleted item from DynamoDB with key ", key);
+			logger.info("GetItem succeeded: ", outcome);
 		} catch (Exception e) {
 			logger.error(e.getMessage(), e);
 		}
 	}
 
 	public Map<String, RegistrationRecord> dbDump() {
-		logger.debug("Entered dbDump");
+		logger.info("Entered dbDump");
 		// TODO - return from DynamoDB
 		return db;
+	}
+	
+	private Table getRegistrationsTable() {
+		AmazonDynamoDB ddb = AmazonDynamoDBClient.builder().withRegion(config.getAwsRegionName()).build();
+		DynamoDB dynamoDB = new DynamoDB(ddb);
+		Table registrationsTable = dynamoDB.getTable(config.getFidoRegistrationsTable());
+		return registrationsTable;
 	}
 }

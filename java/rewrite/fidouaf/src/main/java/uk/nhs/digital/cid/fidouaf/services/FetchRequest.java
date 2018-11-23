@@ -22,12 +22,17 @@ import org.ebayopensource.fido.uaf.msg.RegistrationRequest;
 import org.ebayopensource.fido.uaf.ops.AuthenticationRequestGeneration;
 import org.ebayopensource.fido.uaf.ops.RegistrationRequestGeneration;
 
+import com.google.inject.Inject;
+
 public class FetchRequest {
 
 	private String appId;
 	private String[] aaids;
 	private Notary notary ;
 
+	@Inject
+	private Notary notaryImpl;
+	
 	public FetchRequest(String appId, String[] aaids, Notary notary)
 	{
 		this.notary = notary;
@@ -37,7 +42,7 @@ public class FetchRequest {
 	}
 	
 	public FetchRequest() {
-		this.notary = NotaryImpl.getInstance();
+		this.notary = notaryImpl;
 		this.appId = "";
 		this.aaids = null;
 	}

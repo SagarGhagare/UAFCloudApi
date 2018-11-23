@@ -19,12 +19,26 @@ package uk.nhs.digital.cid.fidouaf.services;
 import org.ebayopensource.fido.uaf.msg.DeregisterAuthenticator;
 import org.ebayopensource.fido.uaf.msg.DeregistrationRequest;
 import org.ebayopensource.fido.uaf.storage.AuthenticatorRecord;
+import org.ebayopensource.fido.uaf.storage.StorageInterface;
 
+import com.google.inject.Inject;
+
+import uk.nhs.digital.cid.fidouaf.logging.Logger;
 import uk.nhs.digital.cid.fidouaf.stats.Dash;
 
-public class DeregRequestProcessor {
+public class DeregRequestProcessor implements IDeregRequestProcessor {
 
+	private StorageInterface storage;
+	private Logger logger;
+	
+	@Inject
+	public DeregRequestProcessor(StorageInterface storage, Logger logger) {
+		this.storage = storage;
+		this.logger = logger;
+	}
+	
 	public String process(DeregistrationRequest[] deRegistrationRequests) {
+		logger.info("Received deRegistrationRequests ", deRegistrationRequests);
 		if (deRegistrationRequests != null) {
 			try {
 				DeregistrationRequest deRegistrationRequest = deRegistrationRequests[0];
@@ -35,12 +49,14 @@ public class DeregRequestProcessor {
 					authRecord.KeyID = authenticator.keyID;
 					try {
 						String Key = authRecord.toString();
-						StorageImpl.getInstance().deleteRegistrationRecord(Key);
+						storage.deleteRegistrationRecord(Key);
 					} catch (Exception e) {
+						logger.error(e.getMessage(), e);
 						return "Failure: Problem in deleting record from local DB";
 					}
 				}
 			} catch (Exception e) {
+				logger.error(e.getMessage(), e);
 				return "Failure: problem processing deregistration request";
 			}
 			return "Success";

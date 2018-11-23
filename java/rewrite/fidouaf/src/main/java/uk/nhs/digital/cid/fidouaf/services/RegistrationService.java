@@ -16,17 +16,27 @@ import org.ebayopensource.fido.uaf.storage.SystemErrorException;
 import com.google.inject.Inject;
 
 import uk.nhs.digital.cid.fidouaf.stats.Dash;
+import uk.nhs.digital.cid.fidouaf.util.Configuration;
 
 public class RegistrationService implements IRegistrationService {
 
 	private final StorageInterface storage;
 	private final Notary notary;
+	private final IProcessResponse processResponse;
+	private final IDeregRequestProcessor deregRequestProcessor;
+	private Configuration config;
 
 	@Inject
-	public RegistrationService(StorageInterface storage, Notary notary)
-	{
+	public RegistrationService(StorageInterface storage,
+							   Notary notary,
+							   IProcessResponse processResponse,
+							   IDeregRequestProcessor deregRequestProcessor,
+							   Configuration config) {
 		this.storage = storage;
 		this.notary = notary;
+		this.processResponse = processResponse;
+		this.deregRequestProcessor = deregRequestProcessor;
+		this.config = config;
 	}
 	
 	public RegistrationRequest[] regReqPublic(String username) {
@@ -45,12 +55,6 @@ public class RegistrationService implements IRegistrationService {
 	 * @return a URL pointing to the TrustedFacets
 	 */
 	private String getAppId() {
-		// You can get it dynamically.
-		// It only works if your server is not behind a reverse proxy
-		//return uriInfo.getBaseUri() + "v1/public/uaf/facets";
-		// Or you can define it statically
-		//TODO - determine app id url dynamically
-		//return "https://api.mr-b.click/fido/fidouaf/v1/public/uaf/facets";
 		return "";
 	}
 	
@@ -82,7 +86,7 @@ public class RegistrationService implements IRegistrationService {
 			Dash.getInstance().history.add(registrationResponse);
 
 			RegistrationResponse response = registrationResponse[0];
-			result = new ProcessResponse(notary, storage).processRegResponse(response);
+			result = processResponse.processRegResponse(response);
 			if (result[0].status.equals("SUCCESS")) {
 				try {
 					storage.store(result);
@@ -106,6 +110,6 @@ public class RegistrationService implements IRegistrationService {
 	}
 	
 	public String deregRequestPublic(DeregistrationRequest[] deRegistrationRequest) {
-		return new DeregRequestProcessor().process(deRegistrationRequest);
+		return deregRequestProcessor.process(deRegistrationRequest);
 	}
 }

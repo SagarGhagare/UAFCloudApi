@@ -1,26 +1,22 @@
 package uk.nhs.digital.cid.fidouaf.services;
 
 import org.ebayopensource.fido.uaf.crypto.Notary;
-import org.ebayopensource.fido.uaf.msg.RegistrationRequest;
-import org.ebayopensource.fido.uaf.msg.RegistrationResponse;
-import org.ebayopensource.fido.uaf.storage.RegistrationRecord;
+import org.ebayopensource.fido.uaf.msg.AuthenticationRequest;
+import org.ebayopensource.fido.uaf.msg.AuthenticationResponse;
+import org.ebayopensource.fido.uaf.storage.AuthenticatorRecord;
 import org.ebayopensource.fido.uaf.storage.StorageInterface;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
-import org.junit.runner.RunWith;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
-import org.mockito.junit.MockitoJUnitRunner;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.google.gson.Gson;
 
+import uk.nhs.digital.cid.fidouaf.facets.Facets;
 import uk.nhs.digital.cid.fidouaf.logging.Logger;
-import uk.nhs.digital.cid.fidouaf.util.Configuration;
 
-@RunWith(MockitoJUnitRunner.class)
-public class RegistrationServiceTest {
+public class AuthenticationServiceTest {
 
 	@Mock
 	public Logger logger;
@@ -34,44 +30,66 @@ public class RegistrationServiceTest {
 	@Mock
 	private IProcessResponse processResponse;
 	
-	@Mock
-	private IDeregRequestProcessor deregRequestProcessor;
-
-	@Mock
-	private Configuration configuration;
-	
 	@Before
 	public void intialise() {
 		MockitoAnnotations.initMocks(this);
 	}
 
-	private RegistrationService getSut() {
-		return new RegistrationService(storage, notary, processResponse, deregRequestProcessor, configuration);
+	private AuthenticationService getSut() {
+		return new AuthenticationService(storage, notary, processResponse, logger);
 	}
 	
 	@Test
-	public void test_GetRecordByUserAndStatus_success() throws JsonProcessingException {
-		String userName= "1d6d2dd3-9b83-4b52-96b6-be21302704c7";
+	public void test_getAuthReq_success() {
+		AuthenticationRequest[] authenticationRequestResponse = getSut().getAuthReq();
 
-		RegistrationRequest[] registrationRequestResponse = getSut().regReqPublic(userName);
-		
-		RegistrationRequest[] response = new Gson().fromJson(getExpectedStringResponse(), RegistrationRequest[].class);
-		Assert.assertNotNull(registrationRequestResponse);
-		Assert.assertEquals(response[0].username, registrationRequestResponse[0].username);
-		
+		AuthenticationRequest[] expected = new Gson().fromJson(getAuthReqResponseString(), AuthenticationRequest[].class);
+		Assert.assertNotNull(authenticationRequestResponse);
+		Assert.assertEquals(expected[0].header.appID, authenticationRequestResponse[0].header.appID);
+		Assert.assertEquals(expected[0].header.upv.major, authenticationRequestResponse[0].header.upv.major);
+		Assert.assertEquals(expected[0].header.upv.minor, authenticationRequestResponse[0].header.upv.minor);
+		Assert.assertEquals(expected[0].header.op.name(), authenticationRequestResponse[0].header.op.name());
+		Assert.assertEquals(expected[0].header.op.ordinal(), authenticationRequestResponse[0].header.op.ordinal());
 	}
 	
 	@Test
-	public void test_processRegResponse_whenRegistrationResponseIsNull() {
-		RegistrationResponse[] registrationResponse = null;
+	public void test_processAuthResponse_success() {
+		AuthenticationResponse[] authenticationResponse = null;
 		
-		RegistrationRecord[] registrationRecord = getSut().processRegResponse(registrationResponse);
-
-		Assert.assertNotNull(registrationRecord);
-		Assert.assertEquals("Error: payload could not be empty", registrationRecord[0].status);
+		AuthenticatorRecord[] AuthenticatorRecord = getSut().processAuthResponse(authenticationResponse);
+		
+		Assert.assertNotNull(AuthenticatorRecord);
 	}
 	
-	private String getExpectedStringResponse() {
+	@SuppressWarnings("deprecation")
+	@Test
+	public void test_facets_success() {
+		String facetsString = "{\r\n" + 
+				"  \"trustedFacets\": [\r\n" + 
+				"    {\r\n" + 
+				"      \"version\": {\r\n" + 
+				"        \"major\": 1,\r\n" + 
+				"        \"minor\": 0\r\n" + 
+				"      },\r\n" + 
+				"      \"ids\": [\r\n" + 
+				"        \"https://www.head2toes.org\",\r\n" + 
+				"        \"android:apk-key-hash:Df+2X53Z0UscvUu6obxC3rIfFyk\",\r\n" + 
+				"        \"android:apk-key-hash:bE0f1WtRJrZv/C0y9CM73bAUqiI\",\r\n" + 
+				"        \"android:apk-key-hash:Lir5oIjf552K/XN4bTul0VS3GfM\",\r\n" + 
+				"        \"https://openidconnect.ebay.com\",\r\n" + 
+				"        \"android:apk-key-hash:CxHdfRYR5KEkAfDMe4jOHGt6RKg\"\r\n" + 
+				"      ]\r\n" + 
+				"    }\r\n" + 
+				"  ]\r\n" + 
+				"}";
+		Facets facets = getSut().facets();
+		
+		Facets expected = new Gson().fromJson(facetsString, Facets.class);
+		Assert.assertNotNull(facets);
+		Assert.assertEquals(expected.trustedFacets[0].ids, facets.trustedFacets[0].ids);
+	}
+	
+	private String getAuthReqResponseString() {
 		return "[\r\n" + 
 				"  {\r\n" + 
 				"    \"header\": {\r\n" + 
@@ -79,12 +97,12 @@ public class RegistrationServiceTest {
 				"        \"major\": 1,\r\n" + 
 				"        \"minor\": 0\r\n" + 
 				"      },\r\n" + 
-				"      \"op\": \"Reg\",\r\n" + 
+				"      \"op\": \"Auth\",\r\n" + 
 				"      \"appID\": \"\",\r\n" + 
-				"      \"serverData\": \"bnVsbC5NVFUwTWpJNU5UQXlNVGs0T0EuTVdRMlpESmtaRE10T1dJNE15MDBZalV5TFRrMllqWXRZbVV5TVRNd01qY3dOR00zLlNrUkthRXBFUlhkS1NHeEpZWHBzTms5R1JrUlhSWEIwVmtaS1dXTkdSWHBYUnpFMllVTTA\"\r\n" + 
+				"      \"serverData\": \"bnVsbC5NVFUwTWpJNU56YzRORGN4TVEuU2tSS2FFcEVSWGRLUjFaelRXcGFXbGRIT0RKaldFa3dZMjVXZWxaSWNFZFNSRTV4VmxkVg\"\r\n" + 
 				"    },\r\n" + 
-				"    \"challenge\": \"JDJhJDEwJHlIazl6OFFDWEptVFJYcFEzWG16aC4\",\r\n" + 
-				"    \"username\": \"1d6d2dd3-9b83-4b52-96b6-be21302704c7\",\r\n" + 
+				"    \"challenge\": \"JDJhJDEwJGVsMjZZWG82cXI0cnVzVHpGRDNqVWU\",\r\n" + 
+				"    \"transaction\": null,\r\n" + 
 				"    \"policy\": {\r\n" + 
 				"      \"accepted\": [\r\n" + 
 				"        [\r\n" + 
