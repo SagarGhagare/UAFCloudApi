@@ -27,6 +27,15 @@
           "Resource": [
               "*"
           ]
+      },
+      {
+          "Effect": "Allow",
+          "Action": [
+                "secretsmanager:GetSecretValue"
+          ],
+          "Resource": [
+              "*"
+          ]
       }
     ]
 }

@@ -10,8 +10,8 @@ locals {
     UAF_BASE_URL              = "https://uaf.${local.domain}"
     FIDO_REGISTRATIONS_TABLE  = "${local.account_name}-${local.environment}-fidouaf-registrations"
     LOG_LEVEL                 = "INFO"
-    SIGNATURES_TABLE_NAME     = "${local.account_name}-${local.environment}-fidouaf-signature"
-	  FIDO_EXPIRY_MSECS         = "20"
-    SECRET_KEY_NAME           = ""
+    SIGNATURES_TABLE_NAME     = "${local.account_name}-${local.environment}-fidouaf-signatures"
+	  FIDO_EXPIRY_MSECS         = "300000"
+    SECRET_KEY_NAME           = "/environment/${local.environment}/fido-secret"
   }
 }

@@ -12,6 +12,7 @@ phases:
       - TFSTATE_BUCKET_PARENT_KEY=`aws ssm get-parameters --names /project/${PROJECT_NAME}/tfstate_bucket_parent_key --query Parameters[0].Value --output text`
       - DEPLOY_REGION=`aws ssm get-parameters --names /environment/${ENVIRONMENT_NAME}/environment_region --query Parameters[0].Value --output text`
       - DEPLOY_DOMAIN=`aws ssm get-parameters --names /environment/${ENVIRONMENT_NAME}/domain --query Parameters[0].Value --output text`
+      - ROLE_ARN=`aws ssm get-parameters --names /environment/${ENVIRONMENT_NAME}/deploy_role_arn --query Parameters[0].Value --output text`
       - echo "--- Construct TF state key ---"
       - TFSTATE_KEY="${TFSTATE_BUCKET_PARENT_KEY}/${ENVIRONMENT_NAME}/fido-uaf-server.tfstate"
       - echo ${TFSTATE_KEY}
